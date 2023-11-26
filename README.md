@@ -32,6 +32,6 @@ Role Reaction:
 
 Simpified and Organized Help command :
 
-![image](https://imgur.com/nOyKVLY.jpg)
+![image](https://imgur.com/3pXSMsJ.jpg)
 
 Made with ❤️ & Python
