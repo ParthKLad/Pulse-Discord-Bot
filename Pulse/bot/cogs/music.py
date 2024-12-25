@@ -88,7 +88,7 @@ async def check_commits(user, repo, channel_id):
     global latest_commit_sha
 
     # Use GitHub API to get commits
-    url = f"https://api.github.com/repos/{user}/{repo}/commits"
+    url = f"https://api.github.com/repos/{user}/{repo}/commits/main"
     response = requests.get(url)
 
     if response.status_code == 200:
