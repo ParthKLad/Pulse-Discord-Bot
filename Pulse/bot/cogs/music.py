@@ -174,7 +174,7 @@ async def _help(inter):
     giveaway_commands = [
         ("/giveaway", "Start a giveaway")
     ]
-
+#test
 
     embed = disnake.Embed(title="Help", description="List of available commands", color=disnake.Color.blue())
 
