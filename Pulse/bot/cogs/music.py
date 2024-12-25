@@ -68,7 +68,7 @@ async def on_ready():
     funny_status = "/help | Report any Issues to @daddylad"
     truncated_status = (funny_status[:46] + "...") if len(funny_status) > 49 else funny_status
     await bot.change_presence(activity=disnake.Activity(type=disnake.ActivityType.listening, name=truncated_status))
-
+'''
 @bot.slash_command(name='setup_commit', description='Set up the bot to check for new commits every 5 minutes')
 async def setup_commit(interaction, user: str, repo: str, channels: str):
     channel_names = channels.split(',')
@@ -118,7 +118,7 @@ async def check_commits(user, repo, channel_id):
         intents = discord.Intents.default()
         intents.typing = False
         intents.presences = False
-            
+'''
 
 
 # Function to get the command signature for a given command
