@@ -69,66 +69,56 @@ async def on_ready():
     truncated_status = (funny_status[:46] + "...") if len(funny_status) > 49 else funny_status
     await bot.change_presence(activity=disnake.Activity(type=disnake.ActivityType.listening, name=truncated_status))
 
-logging.basicConfig(level=logging.INFO)
-
-latest_commit_sha = None
-
 @bot.slash_command(name='setup_commit', description='Set up the bot to check for new commits every 5 minutes')
 async def setup_commit(interaction, user: str, repo: str, channels: str):
     channel_names = channels.split(',')
     for channel_name in channel_names:
         channel = discord.utils.get(interaction.guild.channels, name=channel_name)
         if channel is not None:
-            # Start the loop for each channel.
             check_commits.start(user, repo, channel.id)
+    await interaction.response.send_message(f"Bot is now checking for new commits in {user}/{repo} every 5 minutes and posting updates in the specified channels.")
 
-    await interaction.response.send_message(
-        f"Bot is now checking for new commits in {user}/{repo} every 5 minutes "
-        "and posting updates in the specified channels."
-    )
+
+logging.basicConfig(level=logging.INFO)
+
+latest_commit_sha = None
 
 @tasks.loop(minutes=5)
 async def check_commits(user, repo, channel_id):
     global latest_commit_sha
 
+    # Use GitHub API to get commits
     url = f"https://api.github.com/repos/{user}/{repo}/commits"
     response = requests.get(url)
 
-    # Attempt to fetch the channel. If it doesn't exist (or was deleted), stop further actions.
-    channel = bot.get_channel(channel_id)
-    if channel is None:
-        return
-
     if response.status_code == 200:
-        commits = response.json()
-        if not commits:
-            await channel.send(f"No commits found for {user}/{repo}.")
-            return
+        commits = json.loads(response.text)
 
-        # Latest commit in the list
+        # Let's get the latest commit
         commit = commits[0]
         if commit['sha'] != latest_commit_sha:
             latest_commit_sha = commit['sha']
 
-            # Build a cleaner embed
-            embed = discord.Embed(
-                title=f"New Commit in {user}/{repo}",
-                description=(
-                    f"**Author:** {commit['commit']['author']['name']}\n"
-                    f"**Message:** {commit['commit']['message']}\n\n"
-                    f"[View Commit on GitHub]({commit['html_url']})"
-                ),
-                color=discord.Color.green()
-            )
-            # Optionally include an image preview of the commit from GitHub
+            # Create embed
+            embed = Embed(title=f"New commit in {user}/{repo}")
+            embed.add_field(name="Author", value=commit['commit']['author']['name'])
+            embed.add_field(name="Message", value=commit['commit']['message'])
+            embed.add_field(name="URL", value=commit['html_url'])
             embed.set_image(url=f"https://opengraph.githubassets.com/{commit['sha']}/{user}/{repo}")
 
+            # Send message in chat
+            channel = bot.get_channel(channel_id)
             await channel.send(embed=embed)
+
     else:
-        await channel.send(
-            "Couldn't get the commits. Please make sure the repo and the username are correct."
-        )
-    
+        channel = bot.get_channel(channel_id)
+        await channel.send("Couldn't get the commits. Please make sure the repo and the username are correct.")
+
+
+        intents = discord.Intents.default()
+        intents.typing = False
+        intents.presences = False
+            
 
 
 # Function to get the command signature for a given command
@@ -174,7 +164,7 @@ async def _help(inter):
     giveaway_commands = [
         ("/giveaway", "Start a giveaway")
     ]
-#test
+
 
     embed = disnake.Embed(title="Help", description="List of available commands", color=disnake.Color.blue())
 
