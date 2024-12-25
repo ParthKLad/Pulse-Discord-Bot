@@ -78,7 +78,7 @@ async def setup_commit(interaction, user: str, repo: str, channels: str):
             check_commits.start(user, repo, channel.id)
     await interaction.response.send_message(f"Bot is now checking for new commits in {user}/{repo} every 5 minutes and posting updates in the specified channels.")
 
-
+#Github commits 
 logging.basicConfig(level=logging.INFO)
 
 latest_commit_sha = None
