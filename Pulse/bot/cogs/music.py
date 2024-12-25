@@ -18,7 +18,7 @@ import discord
 from discord import VoiceChannel
 import time
 from collections import deque
-from bot.config import TOKEN, SPOTIPY_CLIENT_ID, SPOTIPY_CLIENT_SECRET
+from bot.config import TOKEN
 from disnake.ui import View, Button
 from typing import Optional
 import aiohttp
@@ -45,25 +45,9 @@ from random import choice
 import textwrap
 from collections import defaultdict
 import uuid
-from bot.utils.prizes import prizes
 from disnake import TextChannel
 import logging
 
-
-
-user_preferences = {}
-# Store the currently playing song for each guild
-global currently_playing
-players = {}
-currently_playing = {}
-queues = {}
-playercontrols = {}
-paused_songs = {}
-page_data = {}
-skip_request = {}
-users_played_before = {}
-# Global variable for data
-data = {}
 
 bot = commands.Bot(command_prefix='/', intents=disnake.Intents.all(), help_command=None)
 
@@ -84,6 +68,67 @@ async def on_ready():
     funny_status = "/help | Report any Issues to @daddylad"
     truncated_status = (funny_status[:46] + "...") if len(funny_status) > 49 else funny_status
     await bot.change_presence(activity=disnake.Activity(type=disnake.ActivityType.listening, name=truncated_status))
+
+logging.basicConfig(level=logging.INFO)
+
+latest_commit_sha = None
+
+@bot.slash_command(name='setup_commit', description='Set up the bot to check for new commits every 5 minutes')
+async def setup_commit(interaction, user: str, repo: str, channels: str):
+    channel_names = channels.split(',')
+    for channel_name in channel_names:
+        channel = discord.utils.get(interaction.guild.channels, name=channel_name)
+        if channel is not None:
+            # Start the loop for each channel.
+            check_commits.start(user, repo, channel.id)
+
+    await interaction.response.send_message(
+        f"Bot is now checking for new commits in {user}/{repo} every 5 minutes "
+        "and posting updates in the specified channels."
+    )
+
+@tasks.loop(minutes=5)
+async def check_commits(user, repo, channel_id):
+    global latest_commit_sha
+
+    url = f"https://api.github.com/repos/{user}/{repo}/commits"
+    response = requests.get(url)
+
+    # Attempt to fetch the channel. If it doesn't exist (or was deleted), stop further actions.
+    channel = bot.get_channel(channel_id)
+    if channel is None:
+        return
+
+    if response.status_code == 200:
+        commits = response.json()
+        if not commits:
+            await channel.send(f"No commits found for {user}/{repo}.")
+            return
+
+        # Latest commit in the list
+        commit = commits[0]
+        if commit['sha'] != latest_commit_sha:
+            latest_commit_sha = commit['sha']
+
+            # Build a cleaner embed
+            embed = discord.Embed(
+                title=f"New Commit in {user}/{repo}",
+                description=(
+                    f"**Author:** {commit['commit']['author']['name']}\n"
+                    f"**Message:** {commit['commit']['message']}\n\n"
+                    f"[View Commit on GitHub]({commit['html_url']})"
+                ),
+                color=discord.Color.green()
+            )
+            # Optionally include an image preview of the commit from GitHub
+            embed.set_image(url=f"https://opengraph.githubassets.com/{commit['sha']}/{user}/{repo}")
+
+            await channel.send(embed=embed)
+    else:
+        await channel.send(
+            "Couldn't get the commits. Please make sure the repo and the username are correct."
+        )
+    
 
 
 # Function to get the command signature for a given command
@@ -162,8 +207,6 @@ async def _help(inter):
     # Add a blank field to separate the commands from the footer
     embed.add_field(name="\u200b", value="\u200b", inline=False)
     embed.set_footer(text="Made with ❤️ by Parth")
-    embed.add_field(name="Support Me", value="[Buy Me a Coffee](https://www.buymeacoffee.com/parthlad)", inline=False)
-    embed.add_field(name="Your support means the world to me! ❤️", value="\u200b")
   
     # Send the embed as a response
     await inter.response.send_message(embed=embed)
@@ -225,8 +268,6 @@ async def show_info(inter):
    # Add a blank field to separate the commands from the footer
     embed.add_field(name="\u200b", value="\u200b", inline=False)
     embed.set_footer(text="Made with ❤️ by Parth")
-    embed.add_field(name="Support Me", value="[Buy Me a Coffee](https://www.buymeacoffee.com/parthlad)", inline=False)
-    embed.add_field(name="Your support means the world to me! ❤️", value="\u200b")
     # Send the embed as a response
     await inter.response.send_message(embed=embed)
 
@@ -544,23 +585,6 @@ async def on_raw_reaction_remove(payload):
 
 #Random commands that are use full
 
-
-@bot.slash_command(description='Show color information.', options=[
-    disnake.Option(name='color_name', description='Enter a color name', type=OptionType.string, required=True)
-])
-async def color(inter: disnake.ApplicationCommandInteraction, color_name: str):
-    color_name = color_name.lower()
-    if color_name not in color_map:
-        await inter.response.send_message("Please provide a valid color name.")
-        return
-
-    color_hex_value = color_map[color_name]
-    color_embed = disnake.Embed(title=f"Color: {color_name.capitalize()}", 
-                                description=f"HEX: #{color_hex_value:06X}\nRGB: ({color_hex_value>>16}, {(color_hex_value>>8)&0xFF}, {color_hex_value&0xFF})",
-                                color=color_hex_value)
-    await inter.response.send_message(embed=color_embed)
-
-
 @bot.slash_command(name="avatar", description="Get a user's avatar", 
                    options=[Option("user", "The user to get the avatar of", type=6, required=False)])
 async def avatar(ctx, user: disnake.User = None):
@@ -768,162 +792,6 @@ async def fetch_poll_results(ctx, channel: disnake.TextChannel, message_id: str)
     return ordered_results, options
 
 
-giveaways = {}  # Initialize the giveaways dictionary to store giveaway details
-
-@bot.slash_command(description="Setup a giveaway")
-@commands.has_permissions(administrator=True)
-async def giveaway(ctx, channel: disnake.TextChannel, *custom_message_lines: str, prize1: str = "", prize2: str = "", prize3: str = "", prize4: str = "", prize5: str = "", prize6: str = "", prize7: str = "", prize8: str = "", prize9: str = "", prize10: str = ""):
-    custom_message = "\n".join(custom_message_lines)  # Join the custom_message_lines into a single string
-    prize_names = [prize for prize in [prize1, prize2, prize3, prize4, prize5, prize6, prize7, prize8, prize9, prize10] if prize]
-    if not prize_names:
-        await ctx.send("Please specify at least one prize.")
-        return
-
-    # Check if all specified prizes are valid
-    for prize_name in prize_names:
-        if prize_name not in prizes:
-            await ctx.send(f"{prize_name} is not a valid prize. Valid prizes are: {', '.join(prizes.keys())}")
-            return
-
-    giveaway_id = str(uuid.uuid4())  # Generate a unique ID
-
-    embed = disnake.Embed(title="🎉 **GIVEAWAY** 🎉", description=custom_message, color=0x00FF00)
-    embed.add_field(name="Prizes", value="\n".join(prize_names), inline=False)
-    embed.set_footer(text="React with 🎁 to participate!")
-
-    giveaway_message = await channel.send(embed=embed)
-    await giveaway_message.add_reaction("🎁")
-
-    # Save the giveaway details
-    giveaways[giveaway_id] = (channel.id, giveaway_message.id, prize_names)
-
-    await ctx.send(f"The giveaway with ID `{giveaway_id}` has started!")
-
-@bot.slash_command(description="End a giveaway")
-@commands.has_permissions(administrator=True)
-async def end_giveaway(ctx, giveaway_id: str, key1: str = "", key2: str = "", key3: str = "", key4: str = "", key5: str = "", key6: str = "", key7: str = "", key8: str = "", key9: str = "", key10: str = ""):
-    if giveaway_id not in giveaways:
-        await ctx.send("That giveaway does not exist.")
-        return
-
-    channel_id, giveaway_message_id, prize_names = giveaways[giveaway_id]
-    del giveaways[giveaway_id]
-
-    keys = [key for key in [key1, key2, key3, key4, key5, key6, key7, key8, key9, key10] if key]
-    if len(keys) != len(prize_names):
-        await ctx.send(f"Please provide exactly {len(prize_names)} keys, one for each prize.")
-        return
-
-    # Get the channel and the giveaway message
-    try:
-        channel = bot.get_channel(channel_id)
-        giveaway_message = await channel.fetch_message(giveaway_message_id)
-    except disnake.NotFound:
-        await ctx.send("The giveaway message was not found.")
-        return
-
-          # Get the users who reacted with 🎁
-    users = set()
-    for reaction in giveaway_message.reactions:
-        if str(reaction.emoji) == "🎁":
-            async for user in reaction.users():
-                if not user.bot:
-                    users.add(user)
-
-    if not users:
-        await ctx.send("No one participated in the giveaway.")
-        return
-
-    if len(users) < len(prize_names):
-        await ctx.send(f"There are not enough participants to choose a winner for each prize. Only {len(users)} user(s) participated in the giveaway.")
-        return
-
-    # Choose a random winner for each prize
-    winners = random.sample(list(users), k=len(prize_names))  # Convert the users set to a list
-
-
-
-
-    for prize_name, key, winner in zip(prize_names, keys, winners):
-        # Retrieve the prize message based on the prize name
-        message = prizes[prize_name].format(key=key)
-
-        # Display the message to the user
-        await winner.send(message)
-
-        await ctx.send(f"🎉 Congratulations {winner.mention}! You won the **{prize_name}** giveaway!")
-
-
-
-#git hub commits 
-@bot.slash_command(name='getcommits', description='Get the latest commits from a GitHub repo')
-async def getcommits(interaction, user: str, repo: str):
-    # Use GitHub API to get commits
-    url = f"https://api.github.com/repos/{user}/{repo}/commits"
-    response = requests.get(url)
-
-    if response.status_code == 200:
-        commits = json.loads(response.text)
-        commit_message = ""
-
-        # Let's get the 5 latest commits
-        for commit in commits[:5]:
-            commit_message += f"Author: {commit['commit']['author']['name']}\nMessage: {commit['commit']['message']}\nUrl: {commit['html_url']}\n\n"
-
-        # Send message in chat
-        await interaction.response.send_message(commit_message)
-
-    else:
-        await interaction.response.send_message("Couldn't get the commits. Please make sure the repo and the username are correct.")
-
-@bot.slash_command(name='setup_commit', description='Set up the bot to check for new commits every 5 minutes')
-async def setup_commit(interaction, user: str, repo: str, channels: str):
-    channel_names = channels.split(',')
-    for channel_name in channel_names:
-        channel = discord.utils.get(interaction.guild.channels, name=channel_name)
-        if channel is not None:
-            check_commits.start(user, repo, channel.id)
-    await interaction.response.send_message(f"Bot is now checking for new commits in {user}/{repo} every 5 minutes and posting updates in the specified channels.")
-
-
-logging.basicConfig(level=logging.INFO)
-
-
-
-latest_commit_sha = None
-
-@tasks.loop(minutes=5)
-async def check_commits(user, repo, channel_id):
-    global latest_commit_sha
-
-    # Use GitHub API to get commits
-    url = f"https://api.github.com/repos/{user}/{repo}/commits"
-    response = requests.get(url)
-
-    if response.status_code == 200:
-        commits = json.loads(response.text)
-
-        # Let's get the latest commit
-        commit = commits[0]
-        if commit['sha'] != latest_commit_sha:
-            latest_commit_sha = commit['sha']
-
-            # Create embed
-            embed = Embed(title=f"New commit in {user}/{repo}")
-            embed.add_field(name="Author", value=commit['commit']['author']['name'])
-            embed.add_field(name="Message", value=commit['commit']['message'])
-            embed.add_field(name="URL", value=commit['html_url'])
-            embed.set_image(url=f"https://opengraph.githubassets.com/{commit['sha']}/{user}/{repo}")
-
-            # Send message in chat
-            channel = bot.get_channel(channel_id)
-            await channel.send(embed=embed)
-
-    else:
-        channel = bot.get_channel(channel_id)
-        await channel.send("Couldn't get the commits. Please make sure the repo and the username are correct.")
-
-
 intents = discord.Intents.default()
 intents.typing = False
 intents.presences = False
@@ -951,21 +819,42 @@ def save_log_channel_id(guild_id, action, channel_id):
     data[f"{guild_id}_{action}"] = channel_id
     save_log_channels_data(data)
 
+# New user embed 
 @bot.event
 async def on_member_join(member):
+    print(f"Member Object: {member}, ID: {member.id}, Mention: {member.mention}")
+    
+    # Small delay to ensure the member is fully cached
+    await asyncio.sleep(1)
+
+    # (Optional) Force-fetch to ensure the Member is up-to-date
+    # member = await member.guild.fetch_member(member.id)
+
     join_log_channel_id = get_log_channel_id(member.guild.id, 'join')
     if join_log_channel_id:
         join_log_channel = bot.get_channel(join_log_channel_id)
-        
-        message = random.choice(WELCOME_MESSAGES).format(member=member.mention, server=member.guild.name)
-        
-        embed = Embed(title="🎮 New Player Alert 🎮",
-                      description=message,
-                      color=Color.lighter_gray())  
-        embed.set_thumbnail(url=member.display_avatar.url)
-        
-        await join_log_channel.send(embed=embed)
 
+        # Pick one random welcome template
+        message_template = random.choice(WELCOME_MESSAGES)
+
+        # Format using the placeholders {member} and {server}
+        # We highlight the user's display name in bold and also ping them in parentheses
+        message = message_template.format(
+            member=f"**{member.display_name}** ({member.mention})",
+            server=member.guild.name
+        )
+
+        # Create the embed message
+        embed = Embed(
+            title="🎮 New Player Alert 🎮",
+            description=message,
+            color=Color.lighter_gray()
+        )
+        embed.set_thumbnail(url=member.display_avatar.url)
+
+        # Send the embed to the join log channel
+        await join_log_channel.send(embed=embed)
+        
 @bot.event
 async def on_member_remove(member):
     leave_log_channel_id = get_log_channel_id(member.guild.id, 'leave')

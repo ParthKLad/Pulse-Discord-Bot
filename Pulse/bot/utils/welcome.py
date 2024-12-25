@@ -58,4 +58,23 @@ WELCOME_MESSAGES = [
     "A warm welcome to {member} as they embark on their gaming odyssey in {server}.",
     "{member} has arrived in {server}, ready to conquer the gaming universe.",
     "Attention, gamers! {member} is here to leave their mark on {server}."
+    "Player {member} has spawned in {server}, armed with a spatula and a vendetta against cereal. Beware.",
+    "Breaking: {member} just crash-landed into {server} riding a shopping cart full of rubber ducks.",
+    "Alert: {member} has breached {server} with the grace of a penguin on roller skates. Watch your backs.",
+    "Player {member} just spawned in {server}, carrying 47 raccoons in a trench coat. No one knows why.",
+    "Player {member} is here! {server} just became a poorly written sitcom with no laugh track.",
+    "Alert: {member} has entered {server}, demanding a karaoke machine and an audience of cats.",
+    "Player {member} has arrived in {server}, fresh from stealing candy from a vending machine. The audacity!",
+    "Breaking news: {member} just spawned in {server}, claiming to be the CEO of chaos and questionable decisions.",
+    "Player {member} spawned into {server} like a raccoon breaking into a nuclear reactor. This won’t end well.",
+    "Player {member} is here, bringing {server} the energy of an over-caffeinated squirrel with a power complex.",
+    "Player {member} just spawned in {server}, already plotting to replace the sun with a disco ball.",
+    "Brace yourselves: {member} has entered {server} wearing a cardboard crown and a cape made of spaghetti.",
+    "Player {member} has spawned in {server} with the same energy as a toddler loose in a candy store.",
+    "Player {member} spawned into {server}, immediately claiming they invented electricity. No proof provided.",
+    "Welcome, {member}! {server} just became the setting for a very weird cooking show no one asked for.",
+    "Player {member} arrived in {server} like a runaway rollercoaster powered by screaming goats.",
+
+
+    
 ]
