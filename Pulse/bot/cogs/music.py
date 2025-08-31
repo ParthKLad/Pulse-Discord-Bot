@@ -47,6 +47,8 @@ from collections import defaultdict
 import uuid
 from disnake import TextChannel
 import logging
+from bot.config import ADMIN_USER_ID
+
 
 
 bot = commands.Bot(command_prefix='/', intents=disnake.Intents.all(), help_command=None)
@@ -233,14 +235,17 @@ async def show_info(inter):
 
     cpu_usage = psutil.cpu_percent()
     memory_usage = psutil.virtual_memory().percent
-    system_stats = f"OS: {platform.system()}\nUptime: {uptime}\nRAM: {memory_usage} MB"
+    system_stats = f"OS: {platform.system()}\nUptime: {uptime_str}\nRAM Usage: {memory_usage}%"
 
     # Calculate ping value
     ping_value = round(bot.latency * 1000)
 
-    # Create the embed
-    embed = disnake.Embed(title="The Gaming Parlor Bot (/) Information", color=disnake.Color.blue())
-
+    # Create the embed with dynamic server name
+    server_name = inter.guild.name if inter.guild else "Direct Message"
+    embed = disnake.Embed(
+        title=f"{server_name} Bot Information",
+        color=disnake.Color.blue()
+    )
 
     # Add bot stats information
     bot_stats_box = f"```\n{bot_stats}\n```"
@@ -254,10 +259,12 @@ async def show_info(inter):
     system_stats_box = f"```\n{system_stats}\n```"
     embed.add_field(name="System Stats", value=system_stats_box, inline=False)
 
-    # Set the footer with library information
-   # Add a blank field to separate the commands from the footer
+    # Add a blank field to separate the commands from the footer
     embed.add_field(name="\u200b", value="\u200b", inline=False)
+
+    # Set the footer
     embed.set_footer(text="Made with ❤️ by Parth")
+
     # Send the embed as a response
     await inter.response.send_message(embed=embed)
 
@@ -852,6 +859,10 @@ async def on_member_remove(member):
         leave_log_channel = bot.get_channel(leave_log_channel_id)
         await leave_log_channel.send(f"{member} has left the server.")
 
+from bot.config import TOKEN, ADMIN_USER_ID
+
+data = {}  # Initialize data before loading
+
 @bot.slash_command(description="Set up log channels")
 async def setup_logs(
     inter: disnake.ApplicationCommandInteraction, 
@@ -867,12 +878,34 @@ async def setup_logs(
     save_log_channel_id(inter.guild.id, 'kick', kick_log_channel.id)
     save_log_channel_id(inter.guild.id, 'mute', mute_log_channel.id)
     await inter.response.send_message("Join, leave, ban, kick and mute logs configured successfully.")
-      
+
+async def notify_admin(bot: commands.Bot, message: str):
+    try:
+        user = await bot.fetch_user(ADMIN_USER_ID)
+        await user.send(f"🚨 Bot Alert:\n{message}")
+    except Exception as e:
+        logging.error(f"Failed to send DM to admin: {e}")
+
 @bot.event
-async def on_error(event, *args, **kwargs):
-    import traceback
-    error_message = traceback.format_exc()
-    print(f"An error occurred: {error_message}")
+async def on_error(event_method, *args, **kwargs):
+    error_msg = f"Unhandled error in `{event_method}`. Bot may go offline.\nTimestamp: {datetime.datetime.utcnow()}"
+    await notify_admin(bot, error_msg)
+    raise  # Optional: re-raise to let Disnake log it too
+
+@bot.slash_command(name="shutdown", description="Safely shut down the bot")
+@commands.is_owner()
+async def shutdown(inter: ApplicationCommandInteraction):
+    await notify_admin(bot, "Bot is shutting down manually via command.")
+    await inter.response.send_message("Shutting down...", ephemeral=True)
+    await bot.close()
+
+@tasks.loop(minutes=5)
+async def background_task():
+    try:
+        # Your task logic
+        pass
+    except Exception as e:
+        await notify_admin(bot, f"Error in background_task: {e}")
 
 # Run the bot
 async def main():
@@ -889,5 +922,6 @@ if __name__ == "__main__":
         print("Failed to decode data, starting fresh.")
 
     asyncio.run(main())
+    
 # Run the bot
 bot.run(TOKEN)
