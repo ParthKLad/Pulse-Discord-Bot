@@ -163,11 +163,6 @@ async def _help(inter):
         ("/getcommits", "Get the latest commits from a GitHub repo")
     ]
 
-    giveaway_commands = [
-        ("/giveaway", "Start a giveaway")
-    ]
-
-
     embed = disnake.Embed(title="Help", description="List of available commands", color=disnake.Color.blue())
 
     embed.add_field(name="\u200b\nUtility Commands:", value="\u200b", inline=False)
@@ -190,9 +185,6 @@ async def _help(inter):
     for name, value in github_commands:
         embed.add_field(name=name, value=value, inline=False)
 
-    embed.add_field(name="\u200b\nGiveaway Commands:", value="\u200b", inline=False)
-    for name, value in giveaway_commands:
-        embed.add_field(name=name, value=value, inline=False)
 
     await inter.response.send_message(embed=embed)
 
@@ -859,7 +851,7 @@ async def on_member_remove(member):
         leave_log_channel = bot.get_channel(leave_log_channel_id)
         await leave_log_channel.send(f"{member} has left the server.")
 
-from bot.config import TOKEN, ADMIN_USER_ID
+
 
 data = {}  # Initialize data before loading
 
@@ -888,9 +880,14 @@ async def notify_admin(bot: commands.Bot, message: str):
 
 @bot.event
 async def on_error(event_method, *args, **kwargs):
-    error_msg = f"Unhandled error in `{event_method}`. Bot may go offline.\nTimestamp: {datetime.datetime.utcnow()}"
+    error_msg = (
+        f"⚠️ Unhandled error in `{event_method}`.\n"
+        f"Timestamp: {datetime.datetime.utcnow().isoformat()} UTC\n"
+        f"Bot may be going offline."
+    )
     await notify_admin(bot, error_msg)
     raise  # Optional: re-raise to let Disnake log it too
+
 
 @bot.slash_command(name="shutdown", description="Safely shut down the bot")
 @commands.is_owner()
@@ -899,29 +896,58 @@ async def shutdown(inter: ApplicationCommandInteraction):
     await inter.response.send_message("Shutting down...", ephemeral=True)
     await bot.close()
 
-@tasks.loop(minutes=5)
-async def background_task():
-    try:
-        # Your task logic
-        pass
-    except Exception as e:
-        await notify_admin(bot, f"Error in background_task: {e}")
+bot_ready = asyncio.Event()
+
+@bot.event
+async def on_ready():
+    print(f"✅ Logged in as {bot.user}")
+    bot_ready.set()
 
 # Run the bot
 async def main():
-    await bot.start(TOKEN)
-
-if __name__ == "__main__":
     try:
         with open('data.json', 'r') as f:
             data.update(json.load(f))
         print("Data loaded successfully.")
-    except FileNotFoundError:
-        print("Data file does not exist, starting fresh.")
-    except json.JSONDecodeError:
-        print("Failed to decode data, starting fresh.")
+    except (FileNotFoundError, json.JSONDecodeError):
+        print("Starting with fresh data.")
 
+    try:
+
+        await bot_ready.wait()  # Wait until bot is ready
+        await bot.start(TOKEN)
+    except disnake.LoginFailure as e:
+        await notify_admin(bot, f"❌ Login failed: {e}")
+    except Exception as e:
+        await notify_admin(bot, f"🔥 Fatal error: {type(e).__name__} - {e}")
+        raise
+    except KeyboardInterrupt:
+        print("Bot interrupted. Shutting down...")
+        try:
+            await notify_admin(bot, "🛑 Bot was manually interrupted (Ctrl+C). Shutting down.")
+        except Exception as e:
+            print(f"Failed to send shutdown DM: {type(e).__name__} - {e}")
+    finally:
+        await bot.close()
+
+async def notify_admin(bot: commands.Bot, message: str):
+    try:
+        user = await bot.fetch_user(ADMIN_USER_ID)
+        await user.send(message)
+        print(f"✅ DM sent to admin: {message}")
+    except Exception as e:
+        print(f"❌ Failed to send DM: {type(e).__name__} - {e}")
+
+@bot.slash_command(name="test_dm", description="Test admin DM")
+@commands.is_owner()
+async def test_dm(inter: disnake.ApplicationCommandInteraction):
+    await notify_admin(bot, "🧪 This is a test DM from your bot.")
+    await inter.response.send_message("Test DM sent (or attempted).", ephemeral=True)
+
+
+if __name__ == "__main__":
     asyncio.run(main())
+
     
 # Run the bot
 bot.run(TOKEN)
