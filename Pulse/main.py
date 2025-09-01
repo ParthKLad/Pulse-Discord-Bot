@@ -31,13 +31,7 @@ async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
 async def main():
-    try:
-        await bot.start(TOKEN)
-    except disnake.LoginFailure as e:
-        print(f"Login failed: {e}")
-    finally:
-        await bot.close()
-
+    await bot.start(TOKEN)
 
 
 if __name__ == "__main__":

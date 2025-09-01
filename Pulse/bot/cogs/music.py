@@ -63,13 +63,7 @@ class YTDLSource(discord.PCMVolumeTransformer):
         self.title = data.get('title')
         self.url = data.get('url')
 
-# Event that triggers when the bot is ready
-@bot.event
-async def on_ready():
-    print(f"Bot is ready: {bot.user.name}")
-    funny_status = "/help | Report any Issues to @daddylad"
-    truncated_status = (funny_status[:46] + "...") if len(funny_status) > 49 else funny_status
-    await bot.change_presence(activity=disnake.Activity(type=disnake.ActivityType.listening, name=truncated_status))
+
 '''
 @bot.slash_command(name='setup_commit', description='Set up the bot to check for new commits every 5 minutes')
 async def setup_commit(interaction, user: str, repo: str, channels: str):
@@ -871,12 +865,6 @@ async def setup_logs(
     save_log_channel_id(inter.guild.id, 'mute', mute_log_channel.id)
     await inter.response.send_message("Join, leave, ban, kick and mute logs configured successfully.")
 
-async def notify_admin(bot: commands.Bot, message: str):
-    try:
-        user = await bot.fetch_user(ADMIN_USER_ID)
-        await user.send(f"🚨 Bot Alert:\n{message}")
-    except Exception as e:
-        logging.error(f"Failed to send DM to admin: {e}")
 
 @bot.event
 async def on_error(event_method, *args, **kwargs):
@@ -901,7 +889,17 @@ bot_ready = asyncio.Event()
 @bot.event
 async def on_ready():
     print(f"✅ Logged in as {bot.user}")
+
+    # Rich presence: Listening to /help | Report issues to @parthynextdoor
+    status_text = "/help | Report issues to @parthynextdoor"
+    activity = disnake.Activity(
+        type=disnake.ActivityType.listening,
+        name=status_text
+    )
+    await bot.change_presence(activity=activity, status=disnake.Status.online)
+
     bot_ready.set()
+
 
 # Run the bot
 async def main():
@@ -913,8 +911,6 @@ async def main():
         print("Starting with fresh data.")
 
     try:
-
-        await bot_ready.wait()  # Wait until bot is ready
         await bot.start(TOKEN)
     except disnake.LoginFailure as e:
         await notify_admin(bot, f"❌ Login failed: {e}")

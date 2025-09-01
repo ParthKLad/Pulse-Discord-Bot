@@ -52,7 +52,7 @@ async def on_ready():
     print(f"Logged in as {bot.user}")
     print(f"Bot is ready: {bot.user.name}")
 
-    funny_status = "/help | Report any Issues to @daddylad"
+    funny_status = "/help | Report any Issues to @parthynextdoor"
     truncated_status = (funny_status[:46] + "...") if len(funny_status) > 49 else funny_status
     await bot.change_presence(activity=disnake.Activity(type=disnake.ActivityType.listening, name=truncated_status))
 
